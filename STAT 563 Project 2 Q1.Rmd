@@ -1,0 +1,162 @@
+---
+title: "STAT_563_Project_2_Q1"
+author: "Cecilia Albert-Black"
+date: "2025-11-03"
+output: html_document
+---
+
+This project integrated large-sample theory, likelihood-based inference, and re-sampling techniques in modern computational statistics. In this Markdown file, I will:
+
+-   Examine the logistic distribution and its importance in statistical modeling and machine learning
+
+-   compute confidence intervals based on Fisher information
+
+-   Explore bootstrapping and the distribution of correlation matrices
+
+-   Implement slice sampling for correlation uncertainty
+
+### Visualization and Interpretation of the Logistic Distribution
+
+The logistic density is given by the function:
+
+$$
+f(x| \mu, s) = \frac{e^{-\frac{x - \mu}{s}}}{s \left(1 + e^{-\frac{x - \mu}{s}}\right)^2}
+$$
+
+#### a. Plotting
+
+Plot the density function for several parameter settings by overlaying the curves on the same axes:
+
+-   mu = 0 with s = 0.5, 1, 2 to study the effect of scale
+
+```{r}
+# Load necessary library
+library(ggplot2)
+
+# Define the logistic density function
+f_logistic <- function(x, mu, s) {
+  exp(-(x - mu)/s) / (s * (1 + exp(-(x - mu)/s))^2)
+}
+
+# Create a sequence of x values for plotting
+x <- seq(-10, 10, length.out = 1000)
+
+# --- (a) Effect of scale parameter s ---
+mu <- 0
+s_values <- c(0.5, 1, 2)
+
+# Compute densities for each s
+dens_scale <- data.frame(
+  x = rep(x, times = length(s_values)),
+  f = unlist(lapply(s_values, function(s) f_logistic(x, mu, s))),
+  s = factor(rep(s_values, each = length(x)))
+)
+
+# Plot: Effect of scale
+ggplot(dens_scale, aes(x = x, y = f, color = s)) +
+  geom_line(size = 1) +
+  labs(
+    title = "Effect of Scale Parameter (s) on Logistic Density",
+    x = "x",
+    y = "Density",
+    color = "Scale (s)"
+  ) +
+  theme_minimal(base_size = 14)
+```
+
+-   s = 1 with mu = -2, 0, 2 to study the effect of location
+
+```{r}
+s <- 1
+mu_values <- c(-2, 0, 2)
+
+# Compute densities for each mu
+dens_location <- data.frame(
+  x = rep(x, times = length(mu_values)),
+  f = unlist(lapply(mu_values, function(mu) f_logistic(x, mu, s))),
+  mu = factor(rep(mu_values, each = length(x)))
+)
+
+# Plot: Effect of location
+ggplot(dens_location, aes(x = x, y = f, color = mu)) +
+  geom_line(size = 1) +
+  labs(
+    title = "Effect of Location Parameter (μ) on Logistic Density",
+    x = "x",
+    y = "Density",
+    color = "Location (μ)"
+  ) +
+  theme_minimal(base_size = 14)
+
+```
+
+#### b. Interpretation
+
+-   The location parameter μ shifts the curve horizontally, serving as both mean and median.
+
+-   The scale parameter s controls spread: larger s produces heavier tails and flatter curvature.
+
+-   The variance of logistic distribution is $$
+    \mathrm{Var}(X) = \frac{\pi^2 s^2}{3}
+    $$
+
+#### c. Comparison with the Normal Distribution
+
+Overlay f(x \| 0, 1) with the standard normal N(0, 1). Discuss how the logistic distribution has heavier tails, offering more robustness to outliers.
+
+```{r}
+# Load required library
+library(ggplot2)
+
+# Define the logistic PDF
+f_logistic <- function(x, mu = 0, s = 1) {
+  exp(-(x - mu)/s) / (s * (1 + exp(-(x - mu)/s))^2)
+}
+
+# Create a sequence of x values
+x <- seq(-6, 6, length.out = 1000)
+
+# Compute densities
+densities <- data.frame(
+  x = x,
+  Logistic = f_logistic(x, mu = 0, s = 1),
+  Normal = dnorm(x, mean = 0, sd = 1)
+)
+
+# Convert to long format for plotting
+dens_long <- tidyr::pivot_longer(densities, cols = c("Logistic", "Normal"),
+                                 names_to = "Distribution", values_to = "Density")
+
+# Plot overlay
+ggplot(dens_long, aes(x = x, y = Density, color = Distribution)) +
+  geom_line(size = 1) +
+  labs(
+    title = "Comparison of Standard Logistic and Standard Normal Densities",
+    x = "x",
+    y = "Density",
+    color = "Distribution"
+  ) +
+  theme_minimal(base_size = 14)
+```
+
+Both the standard logistic and standard normal distribution are symmetrical and bell-shaped centered around the mean (mu) at 0; however, the logistic curve has heavier tails than the normal. Heavier tails means that the density decreases more slowly as observations are farther from mu; in other words, it has a wider spread of values around the mean. This implies that the logistic distribution accounts for a higher probability of observing values farther from the mean compared to the normal distribution. As a result, models based on the logistic distribution are more robust to outliers, since they are less affected by large deviations from the mean.
+
+#### d. Discuss the importance in Statistics and Machine Learning
+
+-   The logistic cumulative density function (CDF) is given by $$
+    F(x \mid \mu, s) = \frac{1}{1 + e({-\frac{x - \mu}{s})}}
+    $$
+
+    which defines the canonical logit link in generalized linear models.
+
+-   In logistic regression, this CDF maps linear predictors to probabilities in (0,1).
+
+-   The heavier tails make logistic likelihoods more robust than Gaussian (Normal) ones.
+
+-   In machine learning (ML), logistic loss (cross-entropy) and softmax generalization underpin neural classification models.
+
+**My interpretation of this is as follows:**
+
+The logistic distribution is foundation at explaining probability-based outcomes in statistics, which is applicable to machine learning. In statistics, generalized linear models (GLMs) can use the logit link function to predict the outcome of a value based on a presence/absence or success/failure probability outcome.
+
+While I have not learned much about machine learning yet, the logistic function appears to have a wide application in this field. It seems that the logistic distribution would be ideal when training a model to identify presence/absence of features within certain categories or criteria. I find it interesting that such a simple statistical distribution underlies much of the modern predictive modeling capabilities and I'm excited to learn more about it.
