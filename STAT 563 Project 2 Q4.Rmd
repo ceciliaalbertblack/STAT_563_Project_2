@@ -1,0 +1,178 @@
+---
+title: "STAT_563_Project_2_Q4"
+author: "Cecilia Albert-Black"
+date: "2025-11-03"
+output: html_document
+---
+
+This project integrated large-sample theory, likelihood-based inference, and re-sampling techniques in modern computational statistics. In this Markdown file, I will:
+
+-   Examine the logistic distribution and its importance in statistical modeling and machine learning
+
+-   compute confidence intervals based on Fisher information
+
+-   Explore bootstrapping and the distribution of correlation matrices
+
+-   Implement slice sampling for correlation uncertainty
+
+### Analytical and Bootstrap Distribution of the Correlation Matrix
+
+According to ChatGPT:
+
+The *analytical* (or theoretical) distribution of the correlation matrix refers to what we can describe **mathematically** — based on probability theory — about how correlations behave when we draw repeated samples from a population.
+
+-   When we compute correlations (like Pearson’s $$ r $$) between variables, those estimates will vary from sample to sample because of **sampling variability**.
+
+-   Statisticians have derived approximate formulas for how these correlations are distributed.
+
+    -   For example, if two variables are jointly normal with true correlation rho, the **sampling distribution** of the sample correlation $$ r $$ can be described by a complicated function of rho and the sample size $$ n $$.
+
+    -   In large samples, we can use **Fisher’s z-transformation**:
+
+So the analytical distribution is **derived from known statistical theory** and depends on assumptions — usually normality of the data and large sample size.
+
+### **Bootstrap Distribution of the Correlation Matrix**
+
+The *bootstrap distribution* doesn’t rely on theory — it’s **empirical**.
+
+-   You repeatedly resample your data (with replacement) to create many “new” datasets.
+
+-   For each bootstrap sample, you compute the **entire correlation matrix** (the set of all pairwise correlations among your variables).
+
+-   After many repetitions, you end up with thousands of correlation matrices — this collection shows you the **bootstrap distribution** of correlations.
+
+This tells you, for example:
+
+-   how much each correlation varies across resamples (its uncertainty),
+
+-   whether the distribution of each correlation is symmetric or skewed,
+
+-   and lets you form **percentile-based confidence intervals** directly from the data (e.g., take the 2.5th and 97.5th percentiles of the bootstrapped correlations).
+
+Unlike the analytical approach, the bootstrap distribution works even if your data are **non-normal**, have **outliers**, or if the theoretical assumptions don’t hold. It’s data-driven rather than formula-driven.
+
+#### Use the given Matlab module
+
+Converted using ChatGPT
+
+```{r}
+## ------------------------------------------------------------
+## BOOTSTRAP_CORRELATION_MATRIX_SLICE.R
+##
+## Bootstrap the full d×d correlation matrix from a dataset,
+## then slice-sample the marginal density of a chosen correlation r_{j,k}.
+## ------------------------------------------------------------
+
+# Load packages
+library(MASS)       # for mvrnorm
+library(stats)      # for cor, quantile, density
+library(ks)         # for optional kde if needed
+
+set.seed(0)
+
+# --- Data generation (replace with your real data) ---
+n <- 200
+d <- 5
+rho <- 0.7
+Sigma <- toeplitz(rho^(0:(d-1)))   # AR(1)-like correlation
+X <- MASS::mvrnorm(n = n, mu = rep(0, d), Sigma = Sigma)
+
+# --- Bootstrap correlation matrix ---
+B <- 1500
+p <- d * (d - 1) / 2
+Rvec <- matrix(NA, nrow = B, ncol = p)
+
+inds <- which(upper.tri(diag(d), diag = FALSE))  # indices of upper triangle
+
+for (b in 1:B) {
+  idx <- sample(1:n, n, replace = TRUE)
+  Xb <- X[idx, ]
+  Rb <- cor(Xb)
+  Rvec[b, ] <- Rb[inds]
+}
+
+# --- Choose a pair (j, k) to study ---
+j <- 1
+k <- 3
+colmap <- matrix(0, nrow = d, ncol = d)
+colmap[upper.tri(colmap)] <- 1:p
+col <- colmap[j, k]
+r_boot <- Rvec[, col]
+
+# --- Compare to Fisher-z interval ---
+z <- 0.5 * log((1 + r_boot) / (1 - r_boot))
+z_mean <- mean(z)
+z_se <- 1 / sqrt(n - 3)
+z_ci <- c(z_mean - 1.96 * z_se, z_mean + 1.96 * z_se)
+ci_fisher <- (exp(2 * z_ci) - 1) / (exp(2 * z_ci) + 1)
+
+# --- KDE for r in (-1, 1) ---
+grid_r <- seq(-0.999, 0.999, length.out = 1000)
+dens <- density(r_boot, from = -0.999, to = 0.999, n = 1000)
+pdf_fun <- approxfun(dens$x, dens$y, rule = 2)  # interpolate PDF
+
+# --- Define 1D slice sampling function ---
+slice1d <- function(logpdf, x0, w, m, nsamp, bounds = c(-1, 1)) {
+  samples <- numeric(nsamp)
+  x <- x0
+  for (i in 1:nsamp) {
+    y <- logpdf(x) - rexp(1)  # sample vertical level
+    # step out
+    L <- x - runif(1) * w
+    R <- L + w
+    J <- floor(runif(1) * m)
+    K <- (m - 1) - J
+    while (J > 0 && L > bounds[1] && logpdf(L) > y) {
+      L <- L - w; J <- J - 1
+    }
+    while (K > 0 && R < bounds[2] && logpdf(R) > y) {
+      R <- R + w; K <- K - 1
+    }
+    # shrinkage
+    repeat {
+      x_new <- runif(1, L, R)
+      if (x_new < bounds[1] || x_new > bounds[2]) next
+      if (logpdf(x_new) >= y) {
+        x <- x_new
+        break
+      } else {
+        if (x_new < x) L <- x_new else R <- x_new
+      }
+    }
+    samples[i] <- x
+  }
+  return(samples)
+}
+
+# --- Slice sampling over r in (-1, 1) ---
+Ns <- 5000
+burn <- 1000
+r0 <- median(r_boot)
+logpdf <- function(r) log(pmax(pdf_fun(r), .Machine$double.xmin))
+r_samples <- slice1d(logpdf, r0, w = 0.05, m = 50, nsamp = Ns + burn, bounds = c(-0.999, 0.999))
+r_slice <- r_samples[(burn + 1):(Ns + burn)]
+
+# --- Intervals ---
+ci_boot <- quantile(r_boot, c(0.025, 0.975))
+ci_slice <- quantile(r_slice, c(0.025, 0.975))
+
+cat(sprintf("Correlation r_{%d,%d}\n", j, k))
+cat(sprintf("Bootstrap percentile CI : [%.3f, %.3f]\n", ci_boot[1], ci_boot[2]))
+cat(sprintf("Fisher-z CI (analytic)  : [%.3f, %.3f]\n", ci_fisher[1], ci_fisher[2]))
+cat(sprintf("Slice-sampled CI        : [%.3f, %.3f]\n", ci_slice[1], ci_slice[2]))
+
+# --- Plots ---
+par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
+
+# Left: Bootstrap histogram + CIs
+hist(r_boot, breaks = 40, freq = FALSE, col = "lightgray",
+     main = sprintf("Bootstrap dist. of r_{%d,%d}", j, k),
+     xlab = sprintf("r_{%d,%d}", j, k))
+lines(dens, lwd = 2)
+abline(v = ci_boot, col = "red", lty = 2, lwd = 2)
+abline(v = ci_fisher, col = "blue", lty = 3, lwd = 2)
+legend("topleft", legend = c("Bootstrap CI", "Fisher-z CI"),
+       col = c("red", "blue"), lty = c(2, 3), lwd = 2, bty = "n")
+```
+
+The uncertainty in a correlation matrix is inherently constrained by its mathematical properties: it must be symmetric, have ones on the diagonal, and be positive semi-definite. These constraints couple the entries, meaning that changes in one correlation can limit the range of possible values for others. By bootstrapping the correlation matrix and then applying slice sampling to a single correlation, we can visualize the marginal distribution of that correlation while implicitly respecting the full set of constraints. Each slice-sampled distribution represents a one-dimensional projection of the high-dimensional space of feasible correlation matrices, showing how plausible values of a particular correlation vary given the data. Narrow and symmetric distributions indicate low uncertainty, while wider or skewed distributions highlight higher uncertainty and dependencies with other correlations. Compared to analytical methods like Fisher-z intervals, which assume independence and normality, slice-sampled marginals more faithfully capture the geometry of uncertainty, revealing the true structure of variability in the correlation matrix.

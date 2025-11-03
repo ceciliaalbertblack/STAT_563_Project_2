@@ -1,0 +1,158 @@
+---
+title: "STAT_563_Project_2_Q3"
+author: "Cecilia Albert-Black"
+date: "2025-11-03"
+output: html_document
+---
+
+This project integrated large-sample theory, likelihood-based inference, and re-sampling techniques in modern computational statistics. In this Markdown file, I will:
+
+-   Examine the logistic distribution and its importance in statistical modeling and machine learning
+
+-   compute confidence intervals based on Fisher information
+
+-   Explore bootstrapping and the distribution of correlation matrices
+
+-   Implement slice sampling for correlation uncertainty
+
+### Wald Confidence Interval and Percentile Bootstrap Confidence Interval for the Mean
+
+Using the simulated data from Q2 part b, compute:
+
+-   the Wald CI based on $$
+    \mathrm{Var}(X) = \frac{\pi^2 s^2}{3}
+    $$
+
+-   the percentile bootstrap CI for the mean
+
+Then, compare shapes and widths using the Matlab module provided.
+
+#### a. Re-generate simulated data
+
+```{r}
+# Load necessary library
+library(stats)
+
+# Step 1: Generate random numbers from a logistic distribution
+set.seed(123)  # For reproducibility
+n <- 200
+true_mu <- 0
+true_s <- 1
+
+# Logistic random variables
+x <- rlogis(n, location = true_mu, scale = true_s)
+
+# View
+hist(x)
+```
+
+#### b. Wald CI
+
+```{r}
+# Estimate mean and scale
+mu_hat <- mean(x)
+s_hat  <- sd(x) * sqrt(3)/pi   # approximate logistic scale from SD
+
+# Variance of the sample mean using logistic formula
+var_mu <- (pi^2 * s_hat^2) / (3 * n)  # Var(mean) = Var(X)/n
+se_mu  <- sqrt(var_mu)
+
+# 95% Wald CI
+z <- qnorm(0.975)
+ci_wald <- mu_hat + c(-1,1) * z * se_mu
+ci_wald
+```
+
+#### c. Percentile bootstrap CI for the mean
+
+```{r}
+set.seed(123)
+B <- 1000  # number of bootstrap samples
+mu_boot <- replicate(B, {
+  xb <- sample(x, replace = TRUE)
+  mean(xb)
+})
+
+# 95% percentile bootstrap CI
+ci_boot <- quantile(mu_boot, probs = c(0.025, 0.975))
+ci_boot
+```
+
+#### d. Compare shapes and widths
+
+The following code is translated from Dr. Bozdogan's Matlab module using ChatGPT:
+
+```{r}
+# libraries
+library(ggplot2)
+library(dplyr)
+
+# Bootstrap CIs for the mean under a Logistic(mu, s) population
+# Compare Normal (Wald) CI vs Percentile Bootstrap CI
+
+set.seed(0)
+
+# --- Population (for simulation) ---
+mu <- 0
+s <- 1                  # Logistic location & scale
+n <- 80                 # sample size
+
+# Simulate logistic via inverse-CDF (same as MATLAB)
+u <- runif(n)
+X <- mu + s * log(u / (1 - u))
+# Alternatively, could use: X <- rlogis(n, location = mu, scale = s)
+
+# --- Point estimate and asymptotic (normal/Wald) CI ---
+xbar <- mean(X)
+s_hat <- sqrt(var(X) * 3 / pi^2)   # plug-in estimator for logistic scale
+z <- qnorm(0.975)
+
+ci_wald <- c(
+  xbar - z * sqrt((pi^2 * s_hat^2) / (3 * n)),
+  xbar + z * sqrt((pi^2 * s_hat^2) / (3 * n))
+)
+
+# --- Bootstrap percentile CI ---
+B <- 2000
+boot_means <- numeric(B)
+
+for (b in 1:B) {
+  Xb <- sample(X, size = n, replace = TRUE)
+  boot_means[b] <- mean(Xb)
+}
+
+ci_boot <- quantile(boot_means, probs = c(0.025, 0.975))
+
+# --- Display results ---
+cat(sprintf("Sample mean      = %.4f\n", xbar))
+cat(sprintf("Normal (Wald) CI = [%.4f, %.4f]\n", ci_wald[1], ci_wald[2]))
+cat(sprintf("Percentile CI    = [%.4f, %.4f]\n", ci_boot[1], ci_boot[2]))
+
+# --- Compare widths ---
+width_wald <- diff(ci_wald)
+width_boot <- diff(ci_boot)
+cat(sprintf("Wald width       = %.4f\n", width_wald))
+cat(sprintf("Bootstrap width  = %.4f\n", width_boot))
+
+# --- Plot ---
+hist(boot_means, breaks = 40, freq = FALSE,
+     main = "Bootstrap distribution of the sample mean (Logistic population)",
+     xlab = "Mean", col = "lightgray", border = "white")
+
+# Add density curve
+lines(density(boot_means), col = "black", lwd = 2)
+
+# Add reference lines
+abline(v = xbar, col = "black", lwd = 2)                 # sample mean
+abline(v = ci_boot, col = "red", lty = 2, lwd = 2)       # bootstrap CI
+abline(v = ci_wald, col = "blue", lty = 3, lwd = 2)      # normal (Wald) CI
+
+legend("topright",
+       legend = c("Sample mean", "Bootstrap 95% CI", "Wald 95% CI"),
+       col = c("black", "red", "blue"),
+       lty = c(1, 2, 3),
+       lwd = 2)
+
+```
+
+The main difference between the Wald and Bootstrap confidence intervals comes down to how they estimate uncertainty. The **Wald interval** relies on a mathematical formula that assumes your sample mean follows a normal distribution — an assumption that works well when your sample is large and your data aren’t too skewed or have too many outliers. It’s fast and easy to calculate because it uses an equation for the variance and a critical value from the normal distribution. The **Bootstrap interval**, on the other hand, doesn’t rely on any distributional assumptions. Instead, it repeatedly resamples from your data (with replacement) to see how much the mean could vary if you collected new samples, then uses those resampled means to find the 2.5th and 97.5th percentiles. In simpler terms, the Wald method trusts theory, while the Bootstrap method trusts your data. The bootstrap tends to be more flexible and reliable, especially when sample sizes are small or data are skewed, whereas the Wald interval is quicker but can be misleading if its assumptions don’t hold.
