@@ -30,19 +30,17 @@ Then, compare shapes and widths using the Matlab module provided.
 #### a. Re-generate simulated data
 
 ```{r}
-# Load necessary library
-library(stats)
+# Create a random dataset
+set.seed(123)  # for reproducibility
 
-# Step 1: Generate random numbers from a logistic distribution
-set.seed(123)  # For reproducibility
-n <- 200
-true_mu <- 0
-true_s <- 1
+# Generate a random dataset of 50 points from a normal distribution
+n <- 50
+x <- rnorm(n, mean = 5, sd = 2)  
 
-# Logistic random variables
-x <- rlogis(n, location = true_mu, scale = true_s)
+# Optional: add a few outliers
+x <- c(x, 20, 25)
 
-# View
+# Quick look at the dataset
 hist(x)
 ```
 
@@ -90,17 +88,14 @@ library(dplyr)
 # Bootstrap CIs for the mean under a Logistic(mu, s) population
 # Compare Normal (Wald) CI vs Percentile Bootstrap CI
 
-set.seed(0)
-
-# --- Population (for simulation) ---
-mu <- 0
+# Define the observed parameters
+mu <- 5
 s <- 1                  # Logistic location & scale
 n <- 80                 # sample size
 
 # Simulate logistic via inverse-CDF (same as MATLAB)
 u <- runif(n)
-X <- mu + s * log(u / (1 - u))
-# Alternatively, could use: X <- rlogis(n, location = mu, scale = s)
+X <- rlogis(n, location = mu, scale = s)
 
 # --- Point estimate and asymptotic (normal/Wald) CI ---
 xbar <- mean(X)

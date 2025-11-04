@@ -70,39 +70,13 @@ S =
 \end{pmatrix}.
 $$
 
-**Plain language summary:**
+#### a. Calculating the MLEs and weights
 
-The likelihood function is a joint probability or density of the observed data viewed as s function of the mean parameter (mu), not of the data. It's purtpose if the quantify how likely the observed data are for different mu.
-
-The log-likelihood function is used to turn products into sums, effectively simplifying the calculation of the likelihood function. It also makes taking derivatives of it easier, which is important for optimization. Lastly, since logarithms are monotone, maximizing the log-likelihood function is equivalent to maximizing the likelihood function.
-
-The score is the derivative of the log-likelihood with respect to the parameters (mu); it measured how sensitive the likelihood is to changes in mu. Solving for the score gives the MLE; in other words, the parameter values that maximize the likelihood.
-
-The score vector is central for inference, such as constructing Wald tests, likelihood ratio tests, and score tests. Its covariance gives the Fisher Information, which measures how much information the data carries about mu.
-
-Practical applications according to ChatGPT:
-
--   Statistics:
-
-    -   MLE for estimating parameters in almost any parametric model (Normal, Logistic, Poisson, etc.).
-
-    -   Hypothesis testing (score test, likelihood ratio test).
-
--   Machine Learning
-
-    -   Logistic regression: Maximize log-likelihood for the coefficients.
-
-    -   Neural networks: Likelihood of outputs leads to cross-entropy loss.
-
-    -   Probabilistic models (Bayesian inference often uses likelihoods in posterior computation).
-
-#### a. Show that the MLEs $$ \hat{\mu}, \hat{s} $$ are:
+$$ \hat{\mu}, \hat{s} $$ are equal to
 
 $$
 \sum_{i=1}^{n} \tanh\left( \frac{X_i - \hat{\mu}}{2 \hat{s}} \right) = 0, \hat{s} = \frac{1}{n} \sum_{i=1}^{n} \lvert X_i - \hat{\mu} \rvert \, w_i
 $$
-
-And obtain $$ w_i $$
 
 ```{r}
 # Create a random dataset
@@ -154,21 +128,28 @@ estimate_mu_s <- function(X, tol = 1e-6, max_iter = 1000) {
   list(mu_hat = mu_hat, s_hat = s_hat, weights = w, iterations = iter)
 }
 
-# Run the function
+# Run the estimation
 result <- estimate_mu_s(X)
 
-# View results
-cat("Results of Robust Estimation:\n")
-cat("-----------------------------\n")
-cat("Estimated mu_hat:", result$mu_hat, "\n")
-cat("Estimated s_hat:", result$s_hat, "\n")
-cat("Number of iterations:", result$iterations, "\n")
-cat("\nWeights for each observation:\n")
-print(result$weights)
+# Create a summary data frame
+summary_table <- data.frame(
+  Parameter = c("Estimated μ̂", "Estimated ŝ", "Iterations"),
+  Value = c(result$mu_hat, result$s_hat, result$iterations)
+)
+
+# Print results
+print(summary_table, row.names = FALSE)
+
+# Show first few weights in tabular form
+weights_table <- data.frame(
+  Observation = 1:length(result$weights),
+  Weight = result$weights
+)
+
+print(head(weights_table, 10), row.names = FALSE)
+
 
 ```
-
-The weights ( $$ w_i $$ ) represent the score/weight of each observation ( $$ X_i $$ ), telling us how trustworthy that data point is when calculating the $$ \hat{\mu}, \hat{s} $$. The closer the observation is to $$ \hat{\mu} $$ , the closer the weight is to 1, which means it is very trustworthy. The farther the observation is to $$ \hat{\mu} $$ , the farther the weight is from 1, which means it is not trustworthy. This effectively makes $$ \hat{\mu}, \hat{s} $$ robust estimators to outliers, since outlying values are given less importance than ones closer to the $$ \hat{\mu} $$ .
 
 #### b. Fisher Information
 
@@ -274,7 +255,14 @@ fisher_scoring <- function(data, tol = 1e-6, max_iter = 100) {
 
 # Step 4: Run Fisher scoring to estimate MLEs
 mle_estimates <- fisher_scoring(x)
-print(mle_estimates)
+
+mle_table <- data.frame(
+  Parameter = names(mle_estimates),
+  Estimate  = round(as.numeric(mle_estimates), 6)
+)
+
+# Print as a table
+print(mle_table, row.names = FALSE)
 
 ```
 
@@ -317,18 +305,23 @@ z <- qnorm(0.975)
 ci_mu <- mu_hat + c(-1,1)*z*se_mu
 ci_s  <- s_hat  + c(-1,1)*z*se_s
 
-ci_mu
-ci_s
+# Results table
+results_table <- data.frame(
+  Estimate  = c(mu_hat, s_hat),
+  Std_Error = c(se_mu, se_s),
+  CI_Lower  = c(ci_mu[1], ci_s[1]),
+  CI_Upper  = c(ci_mu[2], ci_s[2])
+)
+results_table
 ```
 
-2.  Using the empirical CDF: a non-parametric approach, less common but useful for CIs
+2.  Using the empirical CDF (non-parametric): less common but useful for CIs
 
 ```{r}
-# Non-parametric CI for mu (location) using the empirical CDF
+# Estimating mu (location) 
 ci_mu_np <- quantile(x, probs = c(0.025, 0.975))
-ci_mu_np
 
-# Non-parametric CI for s (scale) using bootstrap
+# Estimating s (scale)
 set.seed(123)   # for reproducibility
 B <- 1000       # number of bootstrap samples
 
@@ -339,7 +332,17 @@ s_boot <- replicate(B, {
 
 # 95% CI for s from bootstrap percentiles
 ci_s_np <- quantile(s_boot, probs = c(0.025, 0.975))
-ci_s_np
+
+# Create a table for the CIs
+ci_table <- data.frame(
+  Parameter = c("mu_hat", "s_hat"),
+  CI_Lower = c(ci_mu_np[1], ci_s_np[1]),
+  CI_Upper = c(ci_mu_np[2], ci_s_np[2])
+)
+
+# Print the table
+print(ci_table, row.names = FALSE)
+
 ```
 
 Summary table
